@@ -1,18 +1,18 @@
-"""Profiled TSV training entry point.
+"""Profiled TSV training entry point for RAGTruth and original datasets.
 
 Replicates the training logic from tsv_main.py with profiling instrumentation
-at phase / epoch / operation granularity. Supports RAGTruth dataset.
+at phase / epoch / operation granularity. Supports RAGTruth dataset natively.
 
 Usage:
-    # RAGTruth
+    # RAGTruth (all 3 task types, no truncation)
     CUDA_VISIBLE_DEVICES=0 python run_profiled.py \
         --model_name llama3.1-8B \
         --dataset_name ragtruth \
         --ragtruth_data_dir /path/to/RAGTruth/dataset \
-        --batch_size 8 \
+        --batch_size 2 \
         --profile_output_dir ./profiling_results/
 
-    # Original TQA (for validation)
+    # Original TQA (for validation against paper results)
     CUDA_VISIBLE_DEVICES=0 python run_profiled.py \
         --model_name llama3.1-8B \
         --dataset_name tqa \
@@ -58,6 +58,34 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def pad_prompts_only(prompts_list):
+    """Pad a list of prompt tensors to the same length. Does NOT touch labels.
+
+    This avoids the issue where collate_fn converts soft pseudo-labels to torch.long.
+    """
+    max_seq_len = max(p.size(1) for p in prompts_list)
+    batch_size = len(prompts_list)
+    dtype = prompts_list[0].dtype
+    padded = torch.zeros(batch_size, 1, max_seq_len, dtype=dtype)
+    for i, prompt in enumerate(prompts_list):
+        seq_len = prompt.size(1)
+        padded[i, :, :seq_len] = prompt
+    return padded
+
+
+def safe_auroc(labels, predictions):
+    """Compute AUROC, handling tensor-to-numpy conversion consistently."""
+    if torch.is_tensor(labels):
+        labels = labels.cpu().numpy()
+    if torch.is_tensor(predictions):
+        predictions = predictions.cpu().numpy()
+    return roc_auc_score(labels, predictions)
+
+
+# ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
 
@@ -70,7 +98,8 @@ def parse_args():
     parser.add_argument("--dataset_name", type=str, default="ragtruth",
                         choices=["ragtruth", "tqa", "triviaqa", "sciq", "nq_open"])
     parser.add_argument("--device", type=int, default=0)
-    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--batch_size", type=int, default=2,
+                        help="Batch size. Use 2-4 for RAGTruth (long seqs), 128 for TQA (short seqs)")
     parser.add_argument("--cos_temp", type=float, default=0.1)
     parser.add_argument("--ema_decay", type=float, default=0.99)
     parser.add_argument("--lr", type=float, default=0.005)
@@ -91,15 +120,11 @@ def parse_args():
     parser.add_argument("--ragtruth_data_dir", type=str, default=None,
                         help="Path to RAGTruth dataset dir (containing response.jsonl + source_info.jsonl)")
     parser.add_argument("--ragtruth_task_types", type=str, nargs="+", default=None,
-                        help="Task types to include: QA Summary Data2txt")
-    parser.add_argument("--ragtruth_max_length", type=int, default=2048,
-                        help="Max token length for RAGTruth samples")
-    parser.add_argument("--ragtruth_split_filter", type=str, default=None,
-                        help="Only include samples from this split (train/test/validation)")
+                        help="Task types to include: QA Summary Data2txt (default: all)")
+    parser.add_argument("--ragtruth_max_length", type=int, default=0,
+                        help="Max token length for RAGTruth. 0 = no truncation (default)")
     parser.add_argument("--ragtruth_model_filter", type=str, nargs="+", default=None,
                         help="Only include samples from these source models (partial match)")
-    parser.add_argument("--ragtruth_use_builtin_splits", action="store_true",
-                        help="Use RAGTruth built-in train/test splits instead of random split")
 
     # Profiling args
     parser.add_argument("--profile_output_dir", type=str, default="./profiling_results/")
@@ -114,10 +139,7 @@ def parse_args():
 # ---------------------------------------------------------------------------
 
 def load_original_dataset_data(args, tokenizer):
-    """Load data using the original TSV data pipeline (for tqa/triviaqa/sciq/nq_open).
-
-    Returns (prompts, labels, stats) in the same format as RAGTruthLoader.load().
-    """
+    """Load data using the original TSV data pipeline (for tqa/triviaqa/sciq/nq_open)."""
     from datasets import load_dataset
 
     if args.dataset_name == "tqa":
@@ -140,7 +162,6 @@ def load_original_dataset_data(args, tokenizer):
 
     length = len(dataset)
 
-    # Load pre-generated answers and BLEURT scores
     prompts = []
     for i in range(length):
         question = dataset[i]["question"]
@@ -163,12 +184,12 @@ def load_original_dataset_data(args, tokenizer):
         thres = 0.2
     labels = np.asarray(gts > thres, dtype=np.int32)
 
-    stats = {"total_samples": len(prompts), "dataset": args.dataset_name}
+    stats = {"dataset": args.dataset_name, "total_samples": len(prompts)}
     return prompts, labels, stats, dataset, length
 
 
 def split_original_data(args, prompts, labels, length):
-    """Split original dataset data using pre-saved indices (matching tsv_main.py)."""
+    """Split original dataset using pre-saved indices (matching tsv_main.py)."""
     index = np.load(f"data_indices/data_index_{args.dataset_name}.npy")
     exemplar_index = np.load(f"data_indices/exemplar_idx_{args.dataset_name}.npy")
     wild_q_indices = index[: int(args.wild_ratio * length)]
@@ -215,17 +236,14 @@ def get_ex_data_profiled(model, prompts, labels, batch_size, centroids, sinkhorn
                 for batch_start in tqdm(range(0, num_samples, batch_size), desc="Embedding extraction"):
                     batch_prompts = prompts[batch_start: batch_start + batch_size]
                     batch_labels = labels[batch_start: batch_start + batch_size]
-                    batch_prompts, batch_labels = collate_fn(batch_prompts, batch_labels)
-                    attention_mask = (batch_prompts != 0).half()
-                    batch_prompts = batch_prompts.cuda()
-                    batch_labels = batch_labels.cuda()
-                    attention_mask = attention_mask.to(batch_prompts.device)
-                    all_labels.append(batch_labels.cpu().numpy())
+                    batch_prompts_t, batch_labels_t = collate_fn(batch_prompts, batch_labels)
+                    attention_mask = (batch_prompts_t != 0).half()
+                    batch_prompts_t = batch_prompts_t.cuda()
+                    attention_mask = attention_mask.cuda()
 
-                    output = model(batch_prompts.squeeze(), attention_mask=attention_mask.squeeze(),
+                    output = model(batch_prompts_t.squeeze(), attention_mask=attention_mask.squeeze(),
                                    output_hidden_states=True)
-                    hidden_states = output.hidden_states
-                    hidden_states = torch.stack(hidden_states, dim=0).squeeze()
+                    hidden_states = torch.stack(output.hidden_states, dim=0).squeeze()
                     last_layer_hidden_state = hidden_states[-1]
                     last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze())
                     all_embeddings.append(last_token_rep)
@@ -275,27 +293,19 @@ def main():
         if args.dataset_name == "ragtruth":
             if not args.ragtruth_data_dir:
                 raise ValueError("--ragtruth_data_dir is required for ragtruth dataset")
+
             loader = RAGTruthLoader(
                 data_dir=args.ragtruth_data_dir,
                 tokenizer=tokenizer,
-                max_length=args.ragtruth_max_length,
+                max_length=args.ragtruth_max_length if args.ragtruth_max_length > 0 else None,
                 task_types=args.ragtruth_task_types,
-                split_filter=args.ragtruth_split_filter,
                 model_filter=args.ragtruth_model_filter,
             )
-            if args.ragtruth_use_builtin_splits:
-                (test_prompts, test_labels), (train_prompts, train_labels), \
-                    (exemplar_prompts, exemplar_labels), stats = loader.load_with_builtin_splits(
-                        exemplar_size=args.num_exemplars,
-                    )
-            else:
-                all_prompts, all_labels, stats = loader.load()
-                (test_prompts, test_labels), (train_prompts, train_labels), \
-                    (exemplar_prompts, exemplar_labels) = loader.split_data(
-                        all_prompts, all_labels,
-                        exemplar_size=args.num_exemplars,
-                        wild_ratio=args.wild_ratio,
-                    )
+
+            (test_prompts, test_labels), (train_prompts, train_labels), \
+                (exemplar_prompts, exemplar_labels), stats = loader.load_splits(
+                    exemplar_size=args.num_exemplars,
+                )
             args.num_exemplars = len(exemplar_prompts)
             profiler.set_dataset_info(stats)
         else:
@@ -305,6 +315,8 @@ def main():
             profiler.set_dataset_info(stats)
 
     logger.info(f"Data: test={len(test_prompts)}, train={len(train_prompts)}, exemplar={len(exemplar_prompts)}")
+    logger.info(f"Exemplar label distribution: truthful={exemplar_labels.sum()}, "
+                f"hallucinated={len(exemplar_labels) - exemplar_labels.sum()}")
 
     # ===== Model Setup (freeze + TSV injection) =====
     for param in model.parameters():
@@ -320,6 +332,8 @@ def main():
     add_tsv_layers(model, tsv, [args.lam], args)
 
     optimizer = torch.optim.AdamW(list(tsv.parameters()), lr=args.lr)
+    profiler.update_trainable_params(model)
+
     scaler = GradScaler()
     layer_number = -1
     batch_size = args.batch_size
@@ -340,7 +354,8 @@ def main():
     centroids = F.normalize(centroids, p=2, dim=1)
 
     # Save unpadded exemplar data for later augmentation
-    exemplar_prompts_raw, exemplar_labels_raw = exemplar_prompts, exemplar_labels
+    exemplar_prompts_raw = list(exemplar_prompts)
+    exemplar_labels_raw = exemplar_labels.copy()
     exemplar_prompts_padded, exemplar_labels_padded = collate_fn(exemplar_prompts, exemplar_labels)
 
     # ===== Phase: Init Training (exemplar) =====
@@ -372,7 +387,7 @@ def main():
                     with p.operation("ot_loss"):
                         with autocast(dtype=torch.float16):
                             batch_labels_oh = F.one_hot(batch_labels, num_classes=2)
-                            ot_loss, similarities = compute_ot_loss_cos(
+                            ot_loss, _ = compute_ot_loss_cos(
                                 last_token_rep, centroids, batch_labels_oh, batch_size, args
                             )
                             loss = ot_loss
@@ -399,18 +414,18 @@ def main():
                     test_preds, test_labels_combined = test_model(
                         model, centroids, test_prompts, test_labels, device, batch_size, layer_number
                     )
-                    test_auroc = roc_auc_score(
-                        test_labels_combined.cpu().numpy() if torch.is_tensor(test_labels_combined) else test_labels_combined,
-                        test_preds.cpu().numpy() if torch.is_tensor(test_preds) else test_preds,
-                    )
+                    test_auroc = safe_auroc(test_labels_combined, test_preds)
+
+                # Log metrics for this epoch
+                p.log_epoch_metric("auroc", test_auroc)
+                p.log_epoch_metric("loss", epoch_loss)
 
                 if test_auroc > best_test_auroc:
                     best_test_auroc = test_auroc
                     best_test_epoch = epoch
                 logger.info(f"[Init] Epoch {epoch + 1}/{args.init_num_epochs}, "
-                            f"Loss: {epoch_loss:.4f}, Test AUROC: {test_auroc:.4f}, "
+                            f"Loss: {epoch_loss:.4f}, AUROC: {test_auroc:.4f}, "
                             f"Best: {best_test_auroc:.4f} @ epoch {best_test_epoch}")
-                model.train()
 
     # ===== Phase: Semi-supervised Data Selection =====
     with profiler.phase("ss_data_selection", args.gpu_util_interval) as p:
@@ -419,14 +434,18 @@ def main():
                 model, train_prompts, train_labels, batch_size,
                 centroids, sinkhorn, args.num_selected_data, cls_dist, args, p
             )
+    logger.info(f"Selected {len(selected_indices)} pseudo-labeled samples for augmentation")
 
     # Build augmented dataset
     selected_prompts = [train_prompts[i] for i in selected_indices]
-    augmented_prompts = selected_prompts + list(exemplar_prompts_raw)
+    augmented_prompts = selected_prompts + exemplar_prompts_raw
     exemplar_label_tensor = torch.tensor(exemplar_labels_raw).cuda()
-    exemplar_labels_oh = F.one_hot(exemplar_label_tensor.to(torch.int64), num_classes=2)
-    augmented_labels = torch.concat((selected_labels_soft, exemplar_labels_oh.clone().float().cuda()))
+    exemplar_labels_oh = F.one_hot(exemplar_label_tensor.to(torch.int64), num_classes=2).float()
+    augmented_labels = torch.cat((selected_labels_soft, exemplar_labels_oh.cuda()))
     num_augmented = len(augmented_prompts)
+
+    logger.info(f"Augmented training set: {num_augmented} samples "
+                f"({len(selected_prompts)} pseudo-labeled + {len(exemplar_prompts_raw)} exemplar)")
 
     # ===== Phase: Augmented Training =====
     with profiler.phase("augmented_training", args.gpu_util_interval) as p:
@@ -438,11 +457,10 @@ def main():
 
                     for batch_start in range(0, num_augmented, batch_size):
                         batch_prompts_list = augmented_prompts[batch_start: batch_start + batch_size]
-                        batch_labels_aug = augmented_labels[batch_start: batch_start + batch_size]
-                        # Pad prompts only; keep soft labels as float (collate_fn would
-                        # convert to torch.long, destroying pseudo-label probabilities)
-                        batch_prompts_t, _ = collate_fn(batch_prompts_list, batch_labels_aug)
-                        batch_labels_t = batch_labels_aug  # preserve float soft labels
+                        batch_labels_t = augmented_labels[batch_start: batch_start + batch_size]
+
+                        # Pad prompts only — do NOT pass soft labels through collate_fn
+                        batch_prompts_t = pad_prompts_only(batch_prompts_list)
                         attention_mask = (batch_prompts_t != 0).half()
                         batch_prompts_t = batch_prompts_t.to(device)
                         batch_labels_t = batch_labels_t.to(device)
@@ -457,14 +475,14 @@ def main():
                             last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state,
                                                                           attention_mask.squeeze())
 
-                        # OT loss
+                        # OT loss (with soft pseudo-labels)
                         with p.operation("ot_loss"):
-                            ot_loss, similarities = compute_ot_loss_cos(
+                            ot_loss, _ = compute_ot_loss_cos(
                                 last_token_rep, centroids, batch_labels_t, batch_size, args
                             )
                             loss = ot_loss
 
-                        # Centroid update (soft)
+                        # Centroid update (soft EMA for augmented phase)
                         with p.operation("centroid_update"):
                             with torch.no_grad():
                                 centroids = update_centroids_ema(centroids, last_token_rep,
@@ -488,15 +506,18 @@ def main():
                             test_preds, test_labels_combined = test_model(
                                 model, centroids, test_prompts, test_labels, device, batch_size, layer_number
                             )
-                            test_auroc = roc_auc_score(test_labels_combined, test_preds)
+                            test_auroc = safe_auroc(test_labels_combined, test_preds)
+
+                    # Log metrics
+                    p.log_epoch_metric("auroc", test_auroc)
+                    p.log_epoch_metric("loss", epoch_loss)
 
                     if test_auroc > best_test_auroc:
                         best_test_auroc = test_auroc
                         best_test_epoch = epoch + args.init_num_epochs
                     logger.info(f"[Aug] Epoch {epoch + 1}/{args.aug_num_epochs}, "
-                                f"Loss: {epoch_loss:.4f}, Test AUROC: {test_auroc:.4f}, "
+                                f"Loss: {epoch_loss:.4f}, AUROC: {test_auroc:.4f}, "
                                 f"Best: {best_test_auroc:.4f} @ epoch {best_test_epoch}")
-                    model.train()
 
     # ===== Save profiling results =====
     logger.info(f"Training complete. Best AUROC: {best_test_auroc:.4f} @ epoch {best_test_epoch}")

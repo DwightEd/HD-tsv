@@ -1,8 +1,9 @@
 """Phase-aware profiling engine for TSV training.
 
-Tracks time, GPU memory, CPU memory, and GPU utilization at three granularities:
+Tracks time, GPU memory, CPU memory, GPU utilization, and training metrics
+at three granularities:
 - Phase level (model_loading, data_loading, init_training, ss_data_selection, augmented_training)
-- Epoch level (per-epoch timing within a phase)
+- Epoch level (per-epoch timing + AUROC within a phase)
 - Operation level (forward, backward, ot_loss, centroid_update, test_eval, sinkhorn, etc.)
 
 Usage:
@@ -17,7 +18,9 @@ Usage:
                     with p.operation("backward"):
                         loss.backward()
                 with p.operation("test_eval"):
-                    test_model(...)
+                    auroc = evaluate(...)
+                p.log_epoch_metric("auroc", auroc)
+                p.log_epoch_metric("loss", epoch_loss)
 
     results = profiler.finalize()
     profiler.save()
@@ -71,6 +74,7 @@ class PhaseMetrics:
     phase_name: str
     total_time_seconds: float = 0.0
     epoch_times: List[float] = field(default_factory=list)
+    epoch_metrics: List[Dict[str, float]] = field(default_factory=list)
     operations: Dict[str, OperationStats] = field(default_factory=dict)
     gpu_peak_allocated_mb: float = 0.0
     gpu_peak_reserved_mb: float = 0.0
@@ -83,6 +87,7 @@ class PhaseMetrics:
             "phase_name": self.phase_name,
             "total_time_seconds": round(self.total_time_seconds, 4),
             "epoch_times": [round(t, 4) for t in self.epoch_times],
+            "epoch_metrics": self.epoch_metrics,
             "operations": {k: v.to_dict() for k, v in self.operations.items()},
             "gpu_peak_allocated_mb": round(self.gpu_peak_allocated_mb, 1),
             "gpu_peak_reserved_mb": round(self.gpu_peak_reserved_mb, 1),
@@ -111,6 +116,7 @@ class ProfilingResults:
                 "timestamp": self.timestamp,
                 "total_params": self.total_params,
                 "trainable_params": self.trainable_params,
+                "trainable_ratio": f"{self.trainable_params / max(self.total_params, 1) * 100:.5f}%",
                 "hardware": self.hardware_info,
             },
             "total_time_seconds": round(self.total_time_seconds, 4),
@@ -125,11 +131,12 @@ class ProfilingResults:
 
     def summary(self) -> str:
         lines = [
-            "=" * 60,
+            "=" * 70,
             "TSV Profiling Results Summary",
-            "=" * 60,
+            "=" * 70,
             f"Model: {self.model_name}",
-            f"Total params: {self.total_params:,} | Trainable: {self.trainable_params:,}",
+            f"Total params: {self.total_params:,} | Trainable: {self.trainable_params:,} "
+            f"({self.trainable_params / max(self.total_params, 1) * 100:.5f}%)",
             f"Total time: {self.total_time_seconds:.2f}s",
             "",
         ]
@@ -138,7 +145,7 @@ class ProfilingResults:
             lines.append(f"  {name:<25} {pm.total_time_seconds:>8.2f}s ({pct:>5.1f}%)  "
                          f"GPU peak: {pm.gpu_peak_allocated_mb:>8.1f}MB  "
                          f"CPU peak: {pm.cpu_peak_mb:>8.1f}MB")
-        lines.append("=" * 60)
+        lines.append("=" * 70)
         return "\n".join(lines)
 
 
@@ -175,14 +182,12 @@ class GPUUtilSampler:
     def _sample_loop(self) -> None:
         while not self._stop_event.is_set():
             try:
-                # GPU utilization
                 util = torch.cuda.utilization(self.device_id)
                 self._utilization_samples.append(float(util))
             except Exception:
-                pass  # torch.cuda.utilization may not be available
+                pass
 
             try:
-                # Memory timeline
                 allocated = torch.cuda.memory_allocated(self.device_id) / (1024 ** 2)
                 elapsed = time.time() - self._start_time
                 self._memory_timeline.append((round(elapsed, 2), round(allocated, 1)))
@@ -205,17 +210,19 @@ class GPUUtilSampler:
 # ---------------------------------------------------------------------------
 
 class PhaseProfiler:
-    """Profiles a single training phase (time, memory, operations)."""
+    """Profiles a single training phase (time, memory, operations, metrics)."""
 
     def __init__(self, name: str, sample_interval: float = 2.0):
         self.name = name
         self._sample_interval = sample_interval
         self._start_time = 0.0
         self._epoch_times: List[float] = []
-        self._epoch_start: float = 0.0
-        self._op_records: Dict[str, List[float]] = {}  # op_name -> list of durations (seconds)
+        self._epoch_metrics: List[Dict[str, float]] = []
+        self._current_epoch_metrics: Dict[str, float] = {}
+        self._op_records: Dict[str, List[float]] = {}
         self._sampler = GPUUtilSampler(interval=sample_interval)
         self._metrics: Optional[PhaseMetrics] = None
+        self._tracemalloc_active = False
 
     def __enter__(self) -> "PhaseProfiler":
         # Reset CUDA peak stats
@@ -223,8 +230,10 @@ class PhaseProfiler:
             torch.cuda.reset_peak_memory_stats()
             torch.cuda.synchronize()
 
-        # Start CPU tracking
-        tracemalloc.start()
+        # Start CPU tracking (safely handle nested/concurrent calls)
+        if not tracemalloc.is_tracing():
+            tracemalloc.start()
+            self._tracemalloc_active = True
 
         # Start GPU sampling thread
         self._sampler.start()
@@ -239,9 +248,12 @@ class PhaseProfiler:
         total_time = time.time() - self._start_time
 
         # CPU peak
-        _, cpu_peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-        cpu_peak_mb = cpu_peak / (1024 ** 2)
+        cpu_peak_mb = 0.0
+        if self._tracemalloc_active and tracemalloc.is_tracing():
+            _, cpu_peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+            self._tracemalloc_active = False
+            cpu_peak_mb = cpu_peak / (1024 ** 2)
 
         # GPU peaks
         gpu_peak_allocated = 0.0
@@ -272,6 +284,7 @@ class PhaseProfiler:
             phase_name=self.name,
             total_time_seconds=total_time,
             epoch_times=list(self._epoch_times),
+            epoch_metrics=list(self._epoch_metrics),
             operations=operations,
             gpu_peak_allocated_mb=gpu_peak_allocated,
             gpu_peak_reserved_mb=gpu_peak_reserved,
@@ -285,6 +298,7 @@ class PhaseProfiler:
         """Track a single epoch's duration."""
         if torch.cuda.is_available():
             torch.cuda.synchronize()
+        self._current_epoch_metrics = {}
         start = time.time()
         try:
             yield
@@ -292,6 +306,11 @@ class PhaseProfiler:
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
             self._epoch_times.append(time.time() - start)
+            self._epoch_metrics.append(dict(self._current_epoch_metrics))
+
+    def log_epoch_metric(self, name: str, value: float) -> None:
+        """Log a metric for the current epoch (e.g., AUROC, loss)."""
+        self._current_epoch_metrics[name] = round(value, 6)
 
     @contextmanager
     def operation(self, name: str):
@@ -345,6 +364,10 @@ class TSVProfiler:
     def set_dataset_info(self, info: Dict[str, Any]) -> None:
         self._dataset_info = info
 
+    def update_trainable_params(self, model: torch.nn.Module) -> None:
+        """Re-count trainable params after freezing/adding TSV."""
+        self._trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
     def _get_hardware_info(self) -> Dict[str, Any]:
         info: Dict[str, Any] = {"cuda_available": torch.cuda.is_available()}
         if torch.cuda.is_available():
@@ -381,7 +404,6 @@ class TSVProfiler:
         results = self.finalize()
         os.makedirs(self.output_dir, exist_ok=True)
 
-        # Human-readable report + JSON (handles all output formats)
         from profile_report import save_results
         save_results(results, self.output_dir)
 
