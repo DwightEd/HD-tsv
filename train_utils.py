@@ -33,7 +33,7 @@ def get_last_non_padded_token_rep(hidden_states, attention_mask):
     Get the last non-padded token's representation for each sequence in the batch.
     """
     # Find the length of each sequence by summing the attention mask (1 for real tokens, 0 for padding)
-    lengths = attention_mask.squeeze().sum(dim=1).long()
+    lengths = attention_mask.squeeze(1).sum(dim=1).long()
 
     # Index the last non-padded token for each sequence
     batch_size, max_seq_len, hidden_size = hidden_states.size()
@@ -60,13 +60,13 @@ def get_ex_data(model, prompts, labels, batch_size, centroids, sinkhorn, num_sel
                     attention_mask = attention_mask.to(batch_prompts.device)
                     all_labels.append(batch_labels.cpu().numpy())
 
-                    output = model(batch_prompts.squeeze(), attention_mask=attention_mask.squeeze(),  output_hidden_states=True)
+                    output = model(batch_prompts.squeeze(1), attention_mask=attention_mask.squeeze(1),  output_hidden_states=True)
                     hidden_states = output.hidden_states
 
-                    hidden_states = torch.stack(hidden_states, dim=0).squeeze()
+                    hidden_states = torch.stack(hidden_states, dim=0).squeeze(1)
                     last_layer_hidden_state = hidden_states[-1]  
 
-                    last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze())  
+                    last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze(1))  
                     all_embeddings.append(last_token_rep)
 
             all_embeddings = F.normalize(torch.concat(all_embeddings),p=2,dim=-1)
@@ -148,7 +148,7 @@ def update_centroids_ema(centroids, last_token_rep, pseudo_label, args):
     
     centroids= F.normalize(centroids, p=2, dim=1)
     
-    weighted_sum = torch.matmul(pseudo_label.T, last_token_rep_norm)  
+    weighted_sum = torch.matmul(pseudo_label.T.half(), last_token_rep_norm)  
     
     # Normalize the weighted sums to get the new centroids
     pseudo_label_sum = pseudo_label.sum(dim=0).unsqueeze(1) + 1e-8  
@@ -171,7 +171,7 @@ def update_centroids_ema_hard(centroids, last_token_rep, pseudo_label, args):
     
     discrete_labels[torch.arange(pseudo_label.size(0)), max_indices] = 1
     
-    weighted_sum = torch.matmul(discrete_labels.T.float(), last_token_rep_norm)  
+    weighted_sum = torch.matmul(discrete_labels.T.half(), last_token_rep_norm)  
     
     pseudo_label_sum = discrete_labels.sum(dim=0).unsqueeze(1) + 1e-8  
     

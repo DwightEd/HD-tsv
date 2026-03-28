@@ -1,0 +1,51 @@
+{
+  "model": "/gz-fs/models/Meta-Llama-3.1-8B-Instruct",
+  "total_time_seconds": 2130.99,
+  "total_params": 8030261248,
+  "trainable_params": 4096,
+  "phases": {
+    "model_loading": {
+      "time_seconds": 15.07,
+      "gpu_peak_mb": 15316.5,
+      "cpu_peak_mb": 4.6,
+      "gpu_util_avg": 5.4,
+      "num_epochs": 0
+    },
+    "data_loading": {
+      "time_seconds": 4.18,
+      "gpu_peak_mb": 15316.5,
+      "cpu_peak_mb": 23.9,
+      "gpu_util_avg": 0.0,
+      "num_epochs": 0
+    },
+    "init_training": {
+      "time_seconds": 805.62,
+      "gpu_peak_mb": 42861.7,
+      "cpu_peak_mb": 1.1,
+      "gpu_util_avg": 99.2,
+      "num_epochs": 20,
+      "best_auroc": 0.6062,
+      "forward_batches": 320,
+      "forward_avg_ms": 668.14,
+      "batches_per_sec": 0.4
+    },
+    "ss_data_selection": {
+      "time_seconds": 99.0,
+      "gpu_peak_mb": 31530.8,
+      "cpu_peak_mb": 0.4,
+      "gpu_util_avg": 99.2,
+      "num_epochs": 0
+    },
+    "augmented_training": {
+      "time_seconds": 1205.52,
+      "gpu_peak_mb": 40481.3,
+      "cpu_peak_mb": 0.8,
+      "gpu_util_avg": 99.3,
+      "num_epochs": 20,
+      "best_auroc": 0.5747,
+      "forward_batches": 1600,
+      "forward_avg_ms": 275.91,
+      "batches_per_sec": 1.33
+    }
+  }
+}

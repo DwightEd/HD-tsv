@@ -241,11 +241,11 @@ def get_ex_data_profiled(model, prompts, labels, batch_size, centroids, sinkhorn
                     batch_prompts_t = batch_prompts_t.cuda()
                     attention_mask = attention_mask.cuda()
 
-                    output = model(batch_prompts_t.squeeze(1), attention_mask=attention_mask.squeeze(1),
+                    output = model(batch_prompts_t.squeeze(), attention_mask=attention_mask.squeeze(),
                                    output_hidden_states=True)
-                    hidden_states = torch.stack(output.hidden_states, dim=0)
+                    hidden_states = torch.stack(output.hidden_states, dim=0).squeeze()
                     last_layer_hidden_state = hidden_states[-1]
-                    last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze(1))
+                    last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze())
                     all_embeddings.append(last_token_rep)
 
                 all_embeddings = F.normalize(torch.concat(all_embeddings), p=2, dim=-1)
@@ -283,7 +283,7 @@ def main():
         logger.info(f"Loading model: {model_name_or_path}")
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, low_cpu_mem_usage=True,
-            dtype=torch.float16, device_map="auto", token=""
+            torch_dtype=torch.float16, device_map="auto", token=""
         )
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, token="")
         profiler.set_model_info(model, model_name_or_path)
@@ -307,9 +307,6 @@ def main():
                     exemplar_size=args.num_exemplars,
                 )
             args.num_exemplars = len(exemplar_prompts)
-            stats['detection_model'] = model_name_or_path
-            stats['ragtruth_model_filter'] = args.ragtruth_model_filter
-            stats['ragtruth_task_types'] = args.ragtruth_task_types
             profiler.set_dataset_info(stats)
         else:
             all_prompts, all_labels, stats, dataset, length = load_original_dataset_data(args, tokenizer)
@@ -379,12 +376,12 @@ def main():
                     # Forward
                     with p.operation("forward"):
                         with autocast(dtype=torch.float16):
-                            output = model(batch_prompts.squeeze(1), attention_mask=attention_mask.squeeze(1),
+                            output = model(batch_prompts.squeeze(), attention_mask=attention_mask.squeeze(),
                                            output_hidden_states=True)
-                            hidden_states = torch.stack(output.hidden_states, dim=0)
+                            hidden_states = torch.stack(output.hidden_states, dim=0).squeeze()
                             last_layer_hidden_state = hidden_states[layer_number]
                             last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state,
-                                                                          attention_mask.squeeze(1))
+                                                                          attention_mask.squeeze())
 
                     # OT loss
                     with p.operation("ot_loss"):
@@ -471,12 +468,12 @@ def main():
 
                         # Forward
                         with p.operation("forward"):
-                            output = model(batch_prompts_t.squeeze(1), attention_mask=attention_mask.squeeze(1),
+                            output = model(batch_prompts_t.squeeze(), attention_mask=attention_mask.squeeze(),
                                            output_hidden_states=True)
-                            hidden_states = torch.stack(output.hidden_states, dim=0)
+                            hidden_states = torch.stack(output.hidden_states, dim=0).squeeze()
                             last_layer_hidden_state = hidden_states[layer_number]
                             last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state,
-                                                                          attention_mask.squeeze(1))
+                                                                          attention_mask.squeeze())
 
                         # OT loss (with soft pseudo-labels)
                         with p.operation("ot_loss"):

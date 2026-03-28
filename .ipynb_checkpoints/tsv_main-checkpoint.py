@@ -99,16 +99,16 @@ def train_model(model, optimizer, device, prompts, labels, args):
             # Forward pass
             with autocast(dtype=torch.float16):
                 
-                output = model(batch_prompts.squeeze(1), attention_mask=attention_mask.squeeze(1),  output_hidden_states=True)
+                output = model(batch_prompts.squeeze(), attention_mask=attention_mask.squeeze(),  output_hidden_states=True)
                 
                 hidden_states = output.hidden_states
                 
-                hidden_states = torch.stack(hidden_states, dim=0)
+                hidden_states = torch.stack(hidden_states, dim=0).squeeze()
             
                 last_layer_hidden_state = hidden_states[layer_number]  # Shape: [batch_size, max_seq_len, hidden_size]
                 
                 # Use attention mask to ignore padding tokens, and get the last non-padded token's representation
-                last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze(1))  
+                last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze())  
                 
                 batch_labels_oh = torch.nn.functional.one_hot(batch_labels, num_classes=-1)
                 
@@ -203,17 +203,17 @@ def train_model(model, optimizer, device, prompts, labels, args):
                 batch_labels = batch_labels.to(device)
                 attention_mask = attention_mask.to(batch_prompts.device)
 
-                output = model(batch_prompts.squeeze(1), attention_mask=attention_mask.squeeze(1),  output_hidden_states=True)
+                output = model(batch_prompts.squeeze(), attention_mask=attention_mask.squeeze(),  output_hidden_states=True)
                 
                 hidden_states = output.hidden_states
                 
                 # Stack hidden states and get the last layer's hidden state
-                hidden_states = torch.stack(hidden_states, dim=0)
+                hidden_states = torch.stack(hidden_states, dim=0).squeeze()
                 
                 last_layer_hidden_state = hidden_states[layer_number]  # Shape: [batch_size, max_seq_len, hidden_size]
 
                 # Use attention mask to ignore padding tokens, and get the last non-padded token's representation
-                last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze(1))  # Shape: [batch_size, hidden_size]
+                last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze())  # Shape: [batch_size, hidden_size]
 
                 
                 ot_loss, similarities = compute_ot_loss_cos(last_token_rep, centroids, batch_labels, batch_size, args)
@@ -286,11 +286,11 @@ def test_model(model, centroids, test_prompts, test_labels, device, batch_size, 
                 batch_labels = batch_labels.to(device)
 
                 # Forward pass
-                output = model(batch_prompts.squeeze(1), attention_mask=attention_mask.squeeze(1), output_hidden_states=True)
+                output = model(batch_prompts.squeeze(), attention_mask=attention_mask.squeeze(), output_hidden_states=True)
                 hidden_states = output.hidden_states
-                hidden_states = torch.stack(hidden_states, dim=0)
+                hidden_states = torch.stack(hidden_states, dim=0).squeeze()
                 last_layer_hidden_state = hidden_states[layer_number]
-                last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze(1))   
+                last_token_rep = get_last_non_padded_token_rep(last_layer_hidden_state, attention_mask.squeeze())   
                 
                 all_last_token_reps.append(F.normalize(last_token_rep,p=2,dim=-1).detach().cpu().numpy())
                 all_labels.append(batch_labels.cpu().numpy())
@@ -382,7 +382,7 @@ def main():
     if args.gene:
 
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, token = '')
-        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, low_cpu_mem_usage=True, dtype=torch.float16, device_map="auto", token = '')
+        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, low_cpu_mem_usage=True, torch_dtype=torch.float16, device_map="auto", token = '')
         device = torch.device("cuda")
         all_decoded_answers = []
         begin_index = 0
@@ -568,7 +568,7 @@ def main():
     else:
         
         device = torch.device("cuda")
-        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, low_cpu_mem_usage=True, dtype=torch.float16, device_map="auto", token = '')
+        model = AutoModelForCausalLM.from_pretrained(model_name_or_path, low_cpu_mem_usage=True, torch_dtype=torch.float16, device_map="auto", token = '')
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, token = '')
         
         prompts = []

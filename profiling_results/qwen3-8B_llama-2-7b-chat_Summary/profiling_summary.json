@@ -1,0 +1,51 @@
+{
+  "model": "/gz-fs/models/Qwen/Qwen3-8B",
+  "total_time_seconds": 1829.96,
+  "total_params": 8190735360,
+  "trainable_params": 0,
+  "phases": {
+    "model_loading": {
+      "time_seconds": 22.07,
+      "gpu_peak_mb": 15622.6,
+      "cpu_peak_mb": 80.7,
+      "gpu_util_avg": 3.3,
+      "num_epochs": 0
+    },
+    "data_loading": {
+      "time_seconds": 5.4,
+      "gpu_peak_mb": 15622.6,
+      "cpu_peak_mb": 23.9,
+      "gpu_util_avg": 0.0,
+      "num_epochs": 0
+    },
+    "init_training": {
+      "time_seconds": 779.8,
+      "gpu_peak_mb": 30539.2,
+      "cpu_peak_mb": 1.1,
+      "gpu_util_avg": 98.4,
+      "num_epochs": 20,
+      "best_auroc": 0.5008,
+      "forward_batches": 640,
+      "forward_avg_ms": 340.32,
+      "batches_per_sec": 0.82
+    },
+    "ss_data_selection": {
+      "time_seconds": 84.58,
+      "gpu_peak_mb": 22214.6,
+      "cpu_peak_mb": 0.5,
+      "gpu_util_avg": 98.3,
+      "num_epochs": 0
+    },
+    "augmented_training": {
+      "time_seconds": 937.59,
+      "gpu_peak_mb": 28299.8,
+      "cpu_peak_mb": 1.0,
+      "gpu_util_avg": 96.7,
+      "num_epochs": 20,
+      "best_auroc": 0.5228,
+      "forward_batches": 3200,
+      "forward_avg_ms": 102.85,
+      "batches_per_sec": 3.41
+    }
+  }
+}

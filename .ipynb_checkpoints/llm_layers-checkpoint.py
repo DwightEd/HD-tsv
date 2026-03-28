@@ -92,10 +92,16 @@ class TSVLayer(nn.Module):
 
     def forward(self, x):
         if self.tsv is not None:
+
             x = x.half()
-            y = (self.lam[0] * self.tsv).to(x.device)
-            return (x + y).half()
+            y = self.lam[0] * self.tsv.repeat(1,x.shape[1],1)
+            y = y.to(x.device)
+            x = x.half() + y
+            
+            return x.half()
+        
         else:
+            
             return x.half()
         
 
@@ -198,41 +204,26 @@ def get_mlp_layers(model: PreTrainedModel):
     return mlp_layers
 
 def add_tsv_layers(model: PreTrainedModel, tsv: Tensor, alpha: list, args):
-    """Inject TSV using forward hooks. Compatible with all transformers versions
-    and all model architectures (Llama, Qwen2.5, Qwen3, etc.).
-    Does NOT replace layer objects, so accelerate hooks stay intact."""
     layers = get_layers(model)
+    mlp_keywords = ["mlp", "feedforward", "ffn"]
+    attn_keywords = ["self_attn"]
+    
     assert len(tsv) == len(layers)
+    if args.component == 'mlp':
+        for i, layer in enumerate(layers):
+            if i == args.str_layer:
+                original_mlp = find_module(layer, mlp_keywords)
+                layer.mlp = nn.Sequential(original_mlp, TSVLayer(tsv[i], alpha)) 
 
-    def _make_res_hook(tsv_layer):
-        def hook(module, input, output):
-            if isinstance(output, tuple):
-                hidden_states = tsv_layer(output[0])
-                return (hidden_states,) + output[1:]
-            return tsv_layer(output)
-        return hook
-
-    def _make_mlp_hook(tsv_layer):
-        def hook(module, input, output):
-            return tsv_layer(output)
-        return hook
-
-    def _make_attn_hook(tsv_layer):
-        def hook(module, input, output):
-            if isinstance(output, tuple):
-                hidden_states = tsv_layer(output[0])
-                return (hidden_states,) + output[1:]
-            return tsv_layer(output)
-        return hook
-
-    for i, layer in enumerate(layers):
-        if i == args.str_layer:
-            tsv_layer = TSVLayer(tsv[i], alpha)
-            if args.component == "res":
-                layer.register_forward_hook(_make_res_hook(tsv_layer))
-            elif args.component == "mlp":
-                mlp_module = find_module(layer, ["mlp", "feedforward", "ffn"])
-                mlp_module.register_forward_hook(_make_mlp_hook(tsv_layer))
-            elif args.component == "attn":
-                attn_module = find_module(layer, ["self_attn"])
-                attn_module.register_forward_hook(_make_attn_hook(tsv_layer))
+    elif args.component == 'attn':
+        for i, layer in enumerate(layers):
+            if i == args.str_layer:
+                original_attn = find_module(layer, attn_keywords)
+                layer.self_attn = nn.Sequential(original_attn, TSVLayer(tsv[i], alpha)) 
+                
+    elif args.component == 'res':
+        
+        for i, layer in enumerate(layers):
+            if i == args.str_layer:
+                decoder_layer = layers[i]
+                layers[i] = LlamaDecoderLayerWrapper(decoder_layer, TSVLayer(tsv[i], alpha), args.model_name)

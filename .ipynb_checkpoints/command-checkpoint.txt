@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=0,1 python run_profiled.py     --model_name llama3.1-8B     --dataset_name ragtruth     --ragtruth_data_dir ../../data/RAGTruth/dataset     --ragtruth_model_filter llama-2-7b-chat     --batch_size 4     --str_layer 9     --num_exemplars 32     --num_selected_data 128     --profile_output_dir ./profiling_results/ragtruth_llama2chat/

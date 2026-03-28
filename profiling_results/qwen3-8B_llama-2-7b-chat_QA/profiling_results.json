@@ -1,0 +1,414 @@
+{
+  "metadata": {
+    "model": "/gz-fs/models/Qwen/Qwen3-8B",
+    "timestamp": "2026-03-26T11:44:12.004431",
+    "total_params": 8190735360,
+    "trainable_params": 0,
+    "trainable_ratio": "0.00000%",
+    "hardware": {
+      "cuda_available": true,
+      "device_count": 1,
+      "device_name": "NVIDIA GeForce RTX 4090",
+      "gpu_memory_total_gb": 47.4
+    }
+  },
+  "total_time_seconds": 1262.4657,
+  "phases": {
+    "model_loading": {
+      "phase_name": "model_loading",
+      "total_time_seconds": 22.6023,
+      "epoch_times": [],
+      "epoch_metrics": [],
+      "operations": {},
+      "gpu_peak_allocated_mb": 15622.6,
+      "gpu_peak_reserved_mb": 15624.0,
+      "cpu_peak_mb": 80.6,
+      "gpu_utilization_avg": 2.8,
+      "gpu_memory_timeline_samples": 11
+    },
+    "data_loading": {
+      "phase_name": "data_loading",
+      "total_time_seconds": 4.4222,
+      "epoch_times": [],
+      "epoch_metrics": [],
+      "operations": {},
+      "gpu_peak_allocated_mb": 15622.6,
+      "gpu_peak_reserved_mb": 15624.0,
+      "cpu_peak_mb": 23.9,
+      "gpu_utilization_avg": 0.0,
+      "gpu_memory_timeline_samples": 3
+    },
+    "init_training": {
+      "phase_name": "init_training",
+      "total_time_seconds": 376.5735,
+      "epoch_times": [
+        19.2977,
+        18.6584,
+        18.7371,
+        18.7672,
+        18.7846,
+        18.8005,
+        18.8008,
+        18.8093,
+        18.7976,
+        18.8095,
+        18.7931,
+        18.8564,
+        18.831,
+        18.8317,
+        18.836,
+        18.8157,
+        18.8215,
+        18.8315,
+        18.8539,
+        18.839
+      ],
+      "epoch_metrics": [
+        {
+          "auroc": 0.539651,
+          "loss": 0.674289
+        },
+        {
+          "auroc": 0.535884,
+          "loss": 0.620044
+        },
+        {
+          "auroc": 0.583168,
+          "loss": 0.559069
+        },
+        {
+          "auroc": 0.541832,
+          "loss": 0.551827
+        },
+        {
+          "auroc": 0.536082,
+          "loss": 0.420392
+        },
+        {
+          "auroc": 0.514473,
+          "loss": 0.370645
+        },
+        {
+          "auroc": 0.520024,
+          "loss": 0.265114
+        },
+        {
+          "auroc": 0.542526,
+          "loss": 0.137858
+        },
+        {
+          "auroc": 0.542427,
+          "loss": 0.076308
+        },
+        {
+          "auroc": 0.547978,
+          "loss": 0.024528
+        },
+        {
+          "auroc": 0.528152,
+          "loss": 0.008527
+        },
+        {
+          "auroc": 0.522998,
+          "loss": 0.003715
+        },
+        {
+          "auroc": 0.521709,
+          "loss": 0.001768
+        },
+        {
+          "auroc": 0.52042,
+          "loss": 0.000904
+        },
+        {
+          "auroc": 0.520619,
+          "loss": 0.000495
+        },
+        {
+          "auroc": 0.520222,
+          "loss": 0.000288
+        },
+        {
+          "auroc": 0.519429,
+          "loss": 0.000177
+        },
+        {
+          "auroc": 0.519429,
+          "loss": 0.000115
+        },
+        {
+          "auroc": 0.518636,
+          "loss": 7.7e-05
+        },
+        {
+          "auroc": 0.519231,
+          "loss": 5.4e-05
+        }
+      ],
+      "operations": {
+        "forward": {
+          "name": "forward",
+          "total_seconds": 65.9226,
+          "count": 320,
+          "avg_ms": 206.008,
+          "min_ms": 195.748,
+          "max_ms": 757.588
+        },
+        "ot_loss": {
+          "name": "ot_loss",
+          "total_seconds": 0.4812,
+          "count": 320,
+          "avg_ms": 1.504,
+          "min_ms": 1.008,
+          "max_ms": 59.108
+        },
+        "centroid_update": {
+          "name": "centroid_update",
+          "total_seconds": 0.1579,
+          "count": 320,
+          "avg_ms": 0.494,
+          "min_ms": 0.41,
+          "max_ms": 9.058
+        },
+        "backward": {
+          "name": "backward",
+          "total_seconds": 62.0883,
+          "count": 320,
+          "avg_ms": 194.026,
+          "min_ms": 187.182,
+          "max_ms": 285.567
+        },
+        "test_eval": {
+          "name": "test_eval",
+          "total_seconds": 247.717,
+          "count": 20,
+          "avg_ms": 12385.849,
+          "min_ms": 12242.444,
+          "max_ms": 12445.782
+        }
+      },
+      "gpu_peak_allocated_mb": 25177.6,
+      "gpu_peak_reserved_mb": 30060.0,
+      "cpu_peak_mb": 1.0,
+      "gpu_utilization_avg": 98.0,
+      "gpu_memory_timeline_samples": 187
+    },
+    "ss_data_selection": {
+      "phase_name": "ss_data_selection",
+      "total_time_seconds": 67.8676,
+      "epoch_times": [],
+      "epoch_metrics": [],
+      "operations": {
+        "embedding_extraction": {
+          "name": "embedding_extraction",
+          "total_seconds": 67.8308,
+          "count": 1,
+          "avg_ms": 67830.752,
+          "min_ms": 67830.752,
+          "max_ms": 67830.752
+        },
+        "sinkhorn": {
+          "name": "sinkhorn",
+          "total_seconds": 0.0079,
+          "count": 1,
+          "avg_ms": 7.937,
+          "min_ms": 7.937,
+          "max_ms": 7.937
+        },
+        "data_selection": {
+          "name": "data_selection",
+          "total_seconds": 0.0284,
+          "count": 1,
+          "avg_ms": 28.378,
+          "min_ms": 28.378,
+          "max_ms": 28.378
+        }
+      },
+      "gpu_peak_allocated_mb": 20609.4,
+      "gpu_peak_reserved_mb": 31886.0,
+      "cpu_peak_mb": 0.4,
+      "gpu_utilization_avg": 98.8,
+      "gpu_memory_timeline_samples": 34
+    },
+    "augmented_training": {
+      "phase_name": "augmented_training",
+      "total_time_seconds": 790.5393,
+      "epoch_times": [
+        39.6218,
+        39.6488,
+        39.5759,
+        39.5403,
+        39.5397,
+        39.4972,
+        39.5176,
+        39.505,
+        39.4815,
+        39.4618,
+        39.4775,
+        39.5124,
+        39.517,
+        39.5553,
+        39.5579,
+        39.5219,
+        39.5319,
+        39.5231,
+        39.483,
+        39.4687
+      ],
+      "epoch_metrics": [
+        {
+          "auroc": 0.491475,
+          "loss": 0.000405
+        },
+        {
+          "auroc": 0.515067,
+          "loss": 0.181736
+        },
+        {
+          "auroc": 0.529937,
+          "loss": 1.033853
+        },
+        {
+          "auroc": 0.447661,
+          "loss": 0.627666
+        },
+        {
+          "auroc": 0.424663,
+          "loss": 0.952853
+        },
+        {
+          "auroc": 0.443596,
+          "loss": 0.900252
+        },
+        {
+          "auroc": 0.463918,
+          "loss": 0.723395
+        },
+        {
+          "auroc": 0.491376,
+          "loss": 0.658245
+        },
+        {
+          "auroc": 0.492764,
+          "loss": 0.613096
+        },
+        {
+          "auroc": 0.488997,
+          "loss": 0.616415
+        },
+        {
+          "auroc": 0.522799,
+          "loss": 0.634209
+        },
+        {
+          "auroc": 0.540841,
+          "loss": 0.652261
+        },
+        {
+          "auroc": 0.519033,
+          "loss": 0.666258
+        },
+        {
+          "auroc": 0.532018,
+          "loss": 0.675532
+        },
+        {
+          "auroc": 0.55908,
+          "loss": 0.681467
+        },
+        {
+          "auroc": 0.514274,
+          "loss": 0.684571
+        },
+        {
+          "auroc": 0.541931,
+          "loss": 0.686253
+        },
+        {
+          "auroc": 0.51814,
+          "loss": 0.686234
+        },
+        {
+          "auroc": 0.602498,
+          "loss": 0.684202
+        },
+        {
+          "auroc": 0.53063,
+          "loss": 0.676577
+        }
+      ],
+      "operations": {
+        "forward": {
+          "name": "forward",
+          "total_seconds": 281.1888,
+          "count": 1600,
+          "avg_ms": 175.743,
+          "min_ms": 104.821,
+          "max_ms": 245.825
+        },
+        "ot_loss": {
+          "name": "ot_loss",
+          "total_seconds": 1.5914,
+          "count": 1600,
+          "avg_ms": 0.995,
+          "min_ms": 0.868,
+          "max_ms": 3.659
+        },
+        "centroid_update": {
+          "name": "centroid_update",
+          "total_seconds": 0.555,
+          "count": 1600,
+          "avg_ms": 0.347,
+          "min_ms": 0.311,
+          "max_ms": 1.604
+        },
+        "backward": {
+          "name": "backward",
+          "total_seconds": 258.8894,
+          "count": 1600,
+          "avg_ms": 161.806,
+          "min_ms": 88.559,
+          "max_ms": 240.117
+        },
+        "test_eval": {
+          "name": "test_eval",
+          "total_seconds": 247.3246,
+          "count": 20,
+          "avg_ms": 12366.231,
+          "min_ms": 12328.163,
+          "max_ms": 12450.7
+        }
+      },
+      "gpu_peak_allocated_mb": 26444.7,
+      "gpu_peak_reserved_mb": 31908.0,
+      "cpu_peak_mb": 0.7,
+      "gpu_utilization_avg": 98.5,
+      "gpu_memory_timeline_samples": 394
+    }
+  },
+  "dataset_info": {
+    "dataset": "RAGTruth",
+    "total_samples": 971,
+    "test_samples": 149,
+    "train_wild_samples": 790,
+    "exemplar_samples": 32,
+    "task_type_distribution": {
+      "QA": 971
+    },
+    "label_distribution": {
+      "truthful": 474,
+      "hallucinated": 497
+    },
+    "avg_sequence_length": 602.7,
+    "max_sequence_length": 1051,
+    "max_token_length_setting": "unlimited",
+    "split_mode": "builtin_train_test",
+    "detection_model": "/gz-fs/models/Qwen/Qwen3-8B",
+    "ragtruth_model_filter": [
+      "llama-2-7b-chat"
+    ],
+    "ragtruth_task_types": [
+      "QA"
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+======================================================================
+TSV Profiling Report
+======================================================================
+Timestamp:  2026-03-26T18:18:40.239576
+Model:      /gz-fs/models/Qwen/Qwen3-8B
+Parameters: 8,190,735,360 total | 0 trainable (0.00000%)
+GPU:        NVIDIA GeForce RTX 4090 (47.4 GB) x1
+Dataset:    RAGTruth (943 samples, avg seq len: 856.5, max seq len: 2563)
+            Task types: Summary=943
+            Labels: truthful=509, hallucinated=434
+
+Total Time: 1829.96s
+
+Phase Breakdown:
+---------------------------------------------------------------------------------
+Phase                       Time(s)   Time%  GPU Peak(MB) CPU Peak(MB)  GPU Util%
+---------------------------------------------------------------------------------
+model_loading                 22.07    1.2%       15622.6         80.7       3.3%
+data_loading                   5.40    0.3%       15622.6         23.9       0.0%
+init_training                779.80   42.6%       30539.2          1.1      98.4%
+ss_data_selection             84.58    4.6%       22214.6          0.5      98.3%
+augmented_training           937.59   51.2%       28299.8          1.0      96.7%
+---------------------------------------------------------------------------------
+
+Throughput:
+  model_loading                22.07s total
+  data_loading                  5.40s total
+  init_training                 0.82 batches/s  (640 forward passes in 779.8s)
+                               340.3 ms/batch avg forward
+  ss_data_selection            84.58s total
+  augmented_training            3.41 batches/s  (3200 forward passes in 937.6s)
+                               102.8 ms/batch avg forward
+
+init_training (20 epochs) -- Operation Breakdown:
+  ------------------------------------------------------------------------------
+  Operation                Avg(ms)  Total(s)   Time%   Count   Min(ms)   Max(ms)
+  ------------------------------------------------------------------------------
+  test_eval               16130.23   322.605   41.4%      20  15964.86  16215.53
+  backward                  371.31   237.640   30.5%     640    265.99    473.67
+  forward                   340.32   217.804   27.9%     640    298.70    901.76
+  ot_loss                     1.41     0.903    0.1%     640      0.93     67.62
+  centroid_update             0.47     0.298    0.0%     640      0.40     11.71
+  ------------------------------------------------------------------------------
+
+init_training -- Per-Epoch Times & Metrics:
+  Epoch   1:    39.27s  auroc=0.5008, loss=0.7377
+  Epoch   2:    38.75s  auroc=0.4797, loss=0.7112
+  Epoch   3:    38.81s  auroc=0.4582, loss=0.6907
+  Epoch   4:    38.84s  auroc=0.4855, loss=0.6603
+  Epoch   5:    38.90s  auroc=0.4226, loss=0.6527
+  Epoch   6:    38.86s  auroc=0.4355, loss=0.5786
+  Epoch   7:    38.94s  auroc=0.4427, loss=0.4870
+  Epoch   8:    38.92s  auroc=0.4704, loss=0.6672
+  Epoch   9:    38.92s  auroc=0.3918, loss=0.5685
+  Epoch  10:    39.00s  auroc=0.4763, loss=0.3996
+  Epoch  11:    38.98s  auroc=0.4287, loss=0.2256
+  Epoch  12:    39.00s  auroc=0.4726, loss=0.0722
+  Epoch  13:    39.01s  auroc=0.4817, loss=0.0200
+  Epoch  14:    39.05s  auroc=0.4868, loss=0.0070
+  Epoch  15:    39.11s  auroc=0.4894, loss=0.0028
+  Epoch  16:    39.10s  auroc=0.4903, loss=0.0013
+  Epoch  17:    39.10s  auroc=0.4915, loss=0.0006
+  Epoch  18:    39.11s  auroc=0.4922, loss=0.0004
+  Epoch  19:    39.05s  auroc=0.4930, loss=0.0002
+  Epoch  20:    39.08s  auroc=0.4928, loss=0.0001
+    Average:    38.99s
+  Best AUROC: 0.5008 @ epoch 1
+
+ss_data_selection -- Operation Breakdown:
+  ------------------------------------------------------------------------------
+  Operation                Avg(ms)  Total(s)   Time%   Count   Min(ms)   Max(ms)
+  ------------------------------------------------------------------------------
+  embedding_extraction    84538.78    84.539  100.0%       1  84538.78  84538.78
+  data_selection             27.13     0.027    0.0%       1     27.13     27.13
+  sinkhorn                    8.67     0.009    0.0%       1      8.67      8.67
+  ------------------------------------------------------------------------------
+
+augmented_training (20 epochs) -- Operation Breakdown:
+  ------------------------------------------------------------------------------
+  Operation                Avg(ms)  Total(s)   Time%   Count   Min(ms)   Max(ms)
+  ------------------------------------------------------------------------------
+  forward                   102.85   329.118   35.1%    3200     42.55    316.34
+  test_eval               16274.49   325.490   34.7%      20  16171.59  16646.40
+  backward                   86.12   275.598   29.4%    3200     37.11    278.16
+  ot_loss                     1.07     3.418    0.4%    3200      0.82      5.77
+  centroid_update             0.36     1.158    0.1%    3200      0.30      1.90
+  ------------------------------------------------------------------------------
+
+augmented_training -- Per-Epoch Times & Metrics:
+  Epoch   1:    46.67s  auroc=0.5021, loss=0.0003
+  Epoch   2:    46.74s  auroc=0.5065, loss=0.0001
+  Epoch   3:    46.62s  auroc=0.5086, loss=0.0001
+  Epoch   4:    46.81s  auroc=0.5122, loss=0.0000
+  Epoch   5:    46.98s  auroc=0.5122, loss=0.0000
+  Epoch   6:    47.11s  auroc=0.5111, loss=0.0000
+  Epoch   7:    46.73s  auroc=0.5113, loss=0.0000
+  Epoch   8:    47.00s  auroc=0.5114, loss=0.0000
+  Epoch   9:    46.71s  auroc=0.5126, loss=0.0000
+  Epoch  10:    47.16s  auroc=0.5120, loss=0.0000
+  Epoch  11:    47.21s  auroc=0.5140, loss=0.0000
+  Epoch  12:    46.91s  auroc=0.5138, loss=0.0000
+  Epoch  13:    46.71s  auroc=0.5141, loss=0.0000
+  Epoch  14:    46.68s  auroc=0.5153, loss=0.0000
+  Epoch  15:    46.76s  auroc=0.5165, loss=0.0000
+  Epoch  16:    46.67s  auroc=0.5183, loss=0.0000
+  Epoch  17:    46.93s  auroc=0.5197, loss=0.0000
+  Epoch  18:    46.89s  auroc=0.5193, loss=0.0000
+  Epoch  19:    46.69s  auroc=0.5219, loss=0.0000
+  Epoch  20:    47.61s  auroc=0.5228, loss=0.0000
+    Average:    46.88s
+  Best AUROC: 0.5228 @ epoch 20
+
+======================================================================
